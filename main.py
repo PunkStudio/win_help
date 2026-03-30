@@ -10,15 +10,15 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QFormLayout, QComboBox, QTreeWidget, QTreeWidgetItem)
 from PySide6.QtCore import Qt, QThread, Signal
 
-VERSION = "1.0.0"
+VERSION = "0.0.2"
 # Замените на ваши реальные данные GitHub
 GITHUB_USER = "PunkStudio"
-GITHUB_REPO = "main"
+GITHUB_REPO = "win_help"
 SCRIPTS_PATH = "scripts" # Папка в репозитории, где лежат категории со скриптами
 
-UPDATE_URL = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/version.json"
-EXE_URL = f"https://github.com/{GITHUB_USER}/{GITHUB_REPO}/releases/latest/download/SysAdminHelper.exe"
-API_CONTENTS_URL = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/"
+UPDATE_URL = f"https://raw.githubusercontent.com/PunkStudio/win_help/main/version.json"
+EXE_URL = f"https://github.com/PunkStudio/win_help/releases/latest/download/SysAdminHelper.exe"
+API_CONTENTS_URL = f"https://api.github.com/repos/PunkStudio/win_help/contents/"
 
 CONFIG_FILE = "config.json"
 SCRIPTS_DIR = "scripts_cache"
