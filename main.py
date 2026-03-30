@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QFormLayout, QComboBox, QTreeWidget, QTreeWidgetItem)
 from PySide6.QtCore import Qt, QThread, Signal
 
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 # Замените на ваши реальные данные GitHub
 GITHUB_USER = "PunkStudio"
 GITHUB_REPO = "win_help"
@@ -57,6 +57,8 @@ class ScriptExecutor(QThread):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+                encoding='cp866',  # Используем кодировку для Windows-консоли
+                errors='ignore',   # Игнорируем ошибки декодирования
                 creationflags=subprocess.CREATE_NO_WINDOW
             )
 
