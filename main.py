@@ -7,13 +7,18 @@ import shutil
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QPushButton, QTextEdit, QLabel, 
                              QScrollArea, QMessageBox, QDialog, QLineEdit, 
-                             QFormLayout, QComboBox)
+                             QFormLayout, QComboBox, QTreeWidget, QTreeWidgetItem)
 from PySide6.QtCore import Qt, QThread, Signal
 
 VERSION = "1.0.0"
-# Замените на ваши реальные ссылки на GitHub
-UPDATE_URL = "https://github.com/PunkStudio/main/version.json"
-EXE_URL = "https://github.com/PunkStudio/main/releases/latest/download/SysAdminHelper.exe"
+# Замените на ваши реальные данные GitHub
+GITHUB_USER = "PunkStudio"
+GITHUB_REPO = "main"
+SCRIPTS_PATH = "scripts" # Папка в репозитории, где лежат категории со скриптами
+
+UPDATE_URL = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/version.json"
+EXE_URL = f"https://github.com/{GITHUB_USER}/{GITHUB_REPO}/releases/latest/download/SysAdminHelper.exe"
+API_CONTENTS_URL = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/"
 
 CONFIG_FILE = "config.json"
 SCRIPTS_DIR = "scripts_cache"
@@ -63,47 +68,6 @@ class ScriptExecutor(QThread):
         except Exception as e:
             self.output_signal.emit(f"Error: {str(e)}")
             self.finished_signal.emit(1)
-
-class ScriptEditorDialog(QDialog):
-    def __init__(self, parent=None, script_data=None):
-        super().__init__(parent)
-        self.setWindowTitle("Edit Script")
-        self.layout = QFormLayout(self)
-        
-        self.name_edit = QLineEdit(script_data.get("name", "") if script_data else "")
-        self.desc_edit = QLineEdit(script_data.get("description", "") if script_data else "")
-        self.url_edit = QLineEdit(script_data.get("url", "") if script_data else "")
-        self.type_combo = QComboBox()
-        self.type_combo.addItems(["powershell", "cmd", "python"])
-        if script_data:
-            index = self.type_combo.findText(script_data.get("type", "powershell"))
-            self.type_combo.setCurrentIndex(index)
-        
-        self.command_edit = QLineEdit(script_data.get("command", "") if script_data else "")
-
-        self.layout.addRow("Name:", self.name_edit)
-        self.layout.addRow("Description:", self.desc_edit)
-        self.layout.addRow("GitHub URL:", self.url_edit)
-        self.layout.addRow("Type:", self.type_combo)
-        self.layout.addRow("Command (Optional):", self.command_edit)
-
-        self.buttons = QHBoxLayout()
-        self.save_btn = QPushButton("Save")
-        self.cancel_btn = QPushButton("Cancel")
-        self.save_btn.clicked.connect(self.accept)
-        self.cancel_btn.clicked.connect(self.reject)
-        self.buttons.addWidget(self.save_btn)
-        self.buttons.addWidget(self.cancel_btn)
-        self.layout.addRow(self.buttons)
-
-    def get_data(self):
-        return {
-            "name": self.name_edit.text(),
-            "description": self.desc_edit.text(),
-            "url": self.url_edit.text(),
-            "type": self.type_combo.currentText(),
-            "command": self.command_edit.text()
-        }
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -188,22 +152,19 @@ del "%~f0"
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
 
-        # Left side: Script list
+        # Left side: Dynamic Script tree
         left_widget = QWidget()
         self.left_layout = QVBoxLayout(left_widget)
         
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.script_list_widget = QWidget()
-        self.script_list_layout = QVBoxLayout(self.script_list_widget)
-        self.scroll_area.setWidget(self.script_list_widget)
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabel("Scripts Library (GitHub)")
+        self.tree.itemDoubleClicked.connect(self.on_item_double_clicked)
         
-        self.add_script_btn = QPushButton("Add New Script")
-        self.add_script_btn.clicked.connect(self.add_script)
+        self.refresh_btn = QPushButton("Refresh Scripts from GitHub")
+        self.refresh_btn.clicked.connect(self.fetch_scripts_from_github)
         
-        self.left_layout.addWidget(QLabel("Available Scripts:"))
-        self.left_layout.addWidget(self.scroll_area)
-        self.left_layout.addWidget(self.add_script_btn)
+        self.left_layout.addWidget(self.tree)
+        self.left_layout.addWidget(self.refresh_btn)
 
         # Right side: Logs
         right_widget = QWidget()
@@ -222,38 +183,66 @@ del "%~f0"
         main_layout.addWidget(left_widget, 1)
         main_layout.addWidget(right_widget, 2)
 
-        self.refresh_script_list()
+        self.fetch_scripts_from_github()
 
-    def refresh_script_list(self):
-        # Clear existing buttons
-        while self.script_list_layout.count():
-            item = self.script_list_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-        for i, script in enumerate(self.config["scripts"]):
-            script_container = QWidget()
-            script_layout = QHBoxLayout(script_container)
-            
-            run_btn = QPushButton(script["name"])
-            run_btn.setToolTip(script["description"])
-            run_btn.clicked.connect(lambda checked=False, s=script: self.run_script(s))
-            
-            edit_btn = QPushButton("Edit")
-            edit_btn.setFixedWidth(50)
-            edit_btn.clicked.connect(lambda checked=False, idx=i: self.edit_script(idx))
-            
-            del_btn = QPushButton("X")
-            del_btn.setFixedWidth(30)
-            del_btn.setStyleSheet("background-color: #d9534f; color: white;")
-            del_btn.clicked.connect(lambda checked=False, idx=i: self.delete_script(idx))
-
-            script_layout.addWidget(run_btn)
-            script_layout.addWidget(edit_btn)
-            script_layout.addWidget(del_btn)
-            self.script_list_layout.addWidget(script_container)
+    def fetch_scripts_from_github(self):
+        self.tree.clear()
+        self.log("Fetching script structure from GitHub...")
         
-        self.script_list_layout.addStretch()
+        try:
+            # Get the list of categories (folders) in SCRIPTS_PATH
+            response = requests.get(API_CONTENTS_URL + SCRIPTS_PATH)
+            if response.status_code != 200:
+                self.log(f"Error: GitHub API returned {response.status_code}")
+                return
+
+            items = response.json()
+            for item in items:
+                if item["type"] == "dir":
+                    category_name = item["name"]
+                    category_item = QTreeWidgetItem(self.tree)
+                    category_item.setText(0, category_name)
+                    category_item.setData(0, Qt.UserRole, "category")
+                    
+                    # Fetch scripts inside the category
+                    self.fetch_category_scripts(item["path"], category_item)
+            
+            self.tree.expandAll()
+            self.log("Script library updated successfully.")
+        except Exception as e:
+            self.log(f"Error fetching scripts: {str(e)}")
+
+    def fetch_category_scripts(self, path, parent_item):
+        try:
+            response = requests.get(API_CONTENTS_URL + path)
+            if response.status_code != 200:
+                return
+
+            items = response.json()
+            for item in items:
+                if item["type"] == "file":
+                    # Only include scripts
+                    ext = os.path.splitext(item["name"])[1].lower()
+                    if ext in [".ps1", ".bat", ".cmd", ".py"]:
+                        script_item = QTreeWidgetItem(parent_item)
+                        script_item.setText(0, item["name"])
+                        
+                        # Store script info in item's UserRole
+                        script_type = "powershell" if ext == ".ps1" else "cmd" if ext in [".bat", ".cmd"] else "python"
+                        script_data = {
+                            "name": item["name"],
+                            "url": item["download_url"],
+                            "type": script_type,
+                            "path": item["path"]
+                        }
+                        script_item.setData(0, Qt.UserRole, script_data)
+        except Exception as e:
+            self.log(f"Error fetching scripts for category: {str(e)}")
+
+    def on_item_double_clicked(self, item, column):
+        data = item.data(0, Qt.UserRole)
+        if isinstance(data, dict):
+            self.run_script(data)
 
     def log(self, text):
         self.log_view.append(text)
@@ -261,48 +250,26 @@ del "%~f0"
     def run_script(self, script_data):
         self.log(f"--- Starting: {script_data['name']} ---")
         
-        script_path = os.path.join(SCRIPTS_DIR, f"{script_data.get('id', 'temp')}_{os.path.basename(script_data['url'])}")
+        # Unique name for caching
+        safe_path = script_data["path"].replace("/", "_")
+        script_path = os.path.join(SCRIPTS_DIR, safe_path)
         
-        # Download if needed
-        if script_data["url"]:
-            try:
-                self.log(f"Downloading from {script_data['url']}...")
-                response = requests.get(script_data["url"])
-                response.raise_for_status()
-                with open(script_path, "wb") as f:
-                    f.write(response.content)
-                self.log("Download complete.")
-            except Exception as e:
-                self.log(f"Download failed: {str(e)}")
-                if not os.path.exists(script_path) and not script_data.get("command"):
-                    return
+        try:
+            self.log(f"Downloading from GitHub: {script_data['path']}...")
+            response = requests.get(script_data["url"])
+            response.raise_for_status()
+            with open(script_path, "wb") as f:
+                f.write(response.content)
+            self.log("Download complete.")
+        except Exception as e:
+            self.log(f"Download failed: {str(e)}")
+            if not os.path.exists(script_path):
+                return
 
-        self.executor = ScriptExecutor(script_path, script_data["type"], script_data.get("command"))
+        self.executor = ScriptExecutor(script_path, script_data["type"])
         self.executor.output_signal.connect(self.log)
         self.executor.finished_signal.connect(lambda code: self.log(f"--- Finished with exit code: {code} ---\n"))
         self.executor.start()
-
-    def add_script(self):
-        dialog = ScriptEditorDialog(self, {})
-        if dialog.exec():
-            new_script = dialog.get_data()
-            new_script["id"] = str(hash(new_script["name"]))
-            self.config["scripts"].append(new_script)
-            self.save_config()
-            self.refresh_script_list()
-
-    def edit_script(self, index):
-        dialog = ScriptEditorDialog(self, self.config["scripts"][index])
-        if dialog.exec():
-            self.config["scripts"][index] = dialog.get_data()
-            self.save_config()
-            self.refresh_script_list()
-
-    def delete_script(self, index):
-        if QMessageBox.question(self, "Delete", "Are you sure?") == QMessageBox.StandardButton.Yes:
-            self.config["scripts"].pop(index)
-            self.save_config()
-            self.refresh_script_list()
 
 if __name__ == "__main__":
     app = QApplication([])
