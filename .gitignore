@@ -1,0 +1,5 @@
+.venv
+test.md
+build
+dist
+SysAdminHelper.spec

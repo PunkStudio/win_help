@@ -1,0 +1,20 @@
+{
+    "scripts": [
+        {
+            "id": "get-system-info",
+            "name": "System Info",
+            "description": "Displays basic system information using PowerShell.",
+            "url": "https://raw.githubusercontent.com/PowerShell/PowerShell/master/README.md",
+            "type": "powershell",
+            "command": "Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsArchitecture | Format-List"
+        },
+        {
+            "id": "list-processes",
+            "name": "List Processes",
+            "description": "Lists top 10 processes by memory usage.",
+            "url": "",
+            "type": "powershell",
+            "command": "Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 10 Name, @{Name='Mem(MB)';Expression={[math]::round($_.WorkingSet64 / 1MB, 2)}} | Format-Table"
+        }
+    ]
+}
